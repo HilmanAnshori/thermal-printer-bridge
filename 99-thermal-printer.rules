@@ -1,0 +1,1 @@
+SUBSYSTEM=="usb", ATTR{idVendor}=="09c5", ATTR{idProduct}=="583e", MODE="0666", GROUP="dialout"

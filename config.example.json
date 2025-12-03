@@ -1,0 +1,12 @@
+{
+  "wsPort": 1818,
+  "printer": {
+    "driver": "network",
+    "address": "192.168.18.50", 
+    "usb": {
+      "vendorId": "04b8", 
+      "productId": "0e03"
+    },
+    "encoding": "GB18030"
+  }
+}
