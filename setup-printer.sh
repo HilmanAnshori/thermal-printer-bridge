@@ -350,6 +350,96 @@ EOF
 }
 
 # ============================================================================
+# Update config.json
+# ============================================================================
+
+update_config_json() {
+    print_section "Update config.json"
+    
+    # Find thermal bridge directory
+    local bridge_dir="${HOME}/thermal-printer-bridge"
+    local config_json="${bridge_dir}/config.json"
+    
+    if [ ! -d "$bridge_dir" ]; then
+        log_warning "Thermal bridge directory tidak ditemukan: ${bridge_dir}"
+        log_info "Jika thermal bridge belum diinstall, config.json akan di-skip"
+        return 0
+    fi
+    
+    # Create config.json if not exists
+    if [ ! -f "$config_json" ]; then
+        if [ -f "${bridge_dir}/config.example.json" ]; then
+            log_info "Membuat config.json dari config.example.json..."
+            cp "${bridge_dir}/config.example.json" "$config_json"
+        else
+            log_warning "config.example.json tidak ditemukan, membuat config.json baru..."
+            cat > "$config_json" << 'EOF'
+{
+  "printer": {
+    "type": "usb",
+    "vid": "",
+    "pid": ""
+  }
+}
+EOF
+        fi
+    fi
+    
+    # Update VID & PID in config.json using jq if available, otherwise use sed
+    if command -v jq &> /dev/null; then
+        log_info "Updating config.json dengan jq..."
+        local temp_json=$(mktemp)
+        jq --arg vid "$SELECTED_VID" --arg pid "$SELECTED_PID" \
+           '.printer.type = "usb" | .printer.vid = $vid | .printer.pid = $pid' \
+           "$config_json" > "$temp_json"
+        
+        if [ $? -eq 0 ]; then
+            mv "$temp_json" "$config_json"
+            log_success "config.json berhasil diupdate dengan VID/PID"
+        else
+            rm -f "$temp_json"
+            log_error "Gagal update config.json dengan jq"
+            return 1
+        fi
+    else
+        log_info "jq tidak tersedia, menggunakan sed..."
+        # Backup original
+        cp "$config_json" "${config_json}.backup"
+        
+        # Update using sed (basic JSON manipulation)
+        sed -i "s/\"vid\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"vid\": \"${SELECTED_VID}\"/" "$config_json"
+        sed -i "s/\"pid\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"pid\": \"${SELECTED_PID}\"/" "$config_json"
+        sed -i "s/\"type\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"type\": \"usb\"/" "$config_json"
+        
+        log_success "config.json berhasil diupdate (backup: ${config_json}.backup)"
+    fi
+    
+    # Show updated config
+    echo ""
+    log_info "Isi config.json saat ini:"
+    echo ""
+    if command -v jq &> /dev/null; then
+        jq '.printer' "$config_json" 2>/dev/null || cat "$config_json"
+    else
+        grep -A 5 '"printer"' "$config_json" || cat "$config_json"
+    fi
+    echo ""
+    
+    # Restart thermal bridge service if running
+    if command -v pm2 &> /dev/null; then
+        if pm2 list | grep -q "hale-thermal-bridge"; then
+            log_info "Restarting thermal bridge service..."
+            pm2 restart hale-thermal-bridge 2>/dev/null
+            if [ $? -eq 0 ]; then
+                log_success "Thermal bridge service restarted"
+            else
+                log_warning "Gagal restart service, silahkan restart manual: pm2 restart hale-thermal-bridge"
+            fi
+        fi
+    fi
+}
+
+# ============================================================================
 # Step 5: Show Next Steps
 # ============================================================================
 
@@ -361,12 +451,8 @@ show_next_steps() {
     echo ""
     
     echo -e "${BOLD}Untuk Thermal Bridge (Node.js):${NC}"
-    echo "  1. Edit config.json:"
-    echo "     {\"printer\": {"
-    echo "       \"type\": \"usb\","
-    echo "       \"vid\": \"${SELECTED_VID}\","
-    echo "       \"pid\": \"${SELECTED_PID}\""
-    echo "     }}"
+    echo "  ✓ config.json sudah otomatis diupdate dengan VID/PID"
+    echo "  ✓ Thermal bridge service sudah direstart (jika sedang berjalan)"
     echo ""
     
     echo -e "${BOLD}Atau gunakan environment variables:${NC}"
@@ -432,7 +518,10 @@ main() {
     # Step 4: Save config
     save_configuration
     
-    # Step 5: Show next steps
+    # Step 5: Update config.json
+    update_config_json
+    
+    # Step 6: Show next steps
     show_next_steps
     
     log_success "Setup printer berhasil diselesaikan!"
