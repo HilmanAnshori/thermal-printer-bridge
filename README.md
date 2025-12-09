@@ -19,7 +19,34 @@ Bridge ringan untuk mencetak struk POS melalui WebSocket di sisi client/outlet. 
     ```bash
     npm install
     ```
-4. Salin `config.example.json` menjadi `config.json` dan sesuaikan, atau pakai ENV (lebih mudah karena panel menulis `.env` juga):
+
+### Setup Printer dengan Interactive Wizard
+
+Gunakan script `setup-printer.sh` untuk konfigurasi printer otomatis:
+
+```bash
+sudo ./setup-printer.sh
+```
+
+Script ini akan:
+- **Scan** USB devices dan deteksi printer otomatis
+- **Pilih** printer dari daftar yang terdeteksi
+- **Generate** udev rules yang tepat untuk device Anda
+- **Apply** udev rules dan verifikasi akses
+- **Simpan** konfigurasi ke `~/.hade/thermal-printer-config.sh`
+
+Fitur:
+- Deteksi otomatis printer berdasarkan keyword (thermal, pos, printer, epson, star, dll)
+- Pilihan input manual jika printer tidak terdeteksi
+- Generate dan apply udev rules secara otomatis (cukup `sudo`)
+- Verifikasi akses device setelah konfigurasi
+- Simpan config environment untuk reuse
+
+Setelah setup selesai, konfigurasi sudah tersimpan dan siap digunakan oleh thermal bridge.
+
+### Konfigurasi Manual
+
+Jika tidak menggunakan wizard, salin `config.example.json` menjadi `config.json` dan sesuaikan, atau pakai ENV:
 
 ```
 BRIDGE_PORT=1818
