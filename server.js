@@ -575,14 +575,25 @@ const openCashDrawer = () => {
         return reject(deviceError);
       }
 
+      const closeHandler = (closeErr) => {
+        if (closeErr) return reject(closeErr);
+        console.log("[Bridge] Perintah buka drawer terkirim, koneksi ditutup.");
+        resolve();
+      };
+
       try {
-        printer.drawer().close((closeErr) => {
-          if (closeErr) return reject(closeErr);
-          console.log(
-            "[Bridge] Perintah buka drawer terkirim, koneksi ditutup."
-          );
-          resolve();
-        });
+        if (typeof printer.cashdraw === "function") {
+          // ESC/POS pulse to kick drawer, pin 2 is common.
+          printer.cashdraw(2).close(closeHandler);
+          return;
+        }
+
+        if (typeof printer.drawer === "function") {
+          printer.drawer().close(closeHandler);
+          return;
+        }
+
+        throw new Error("Fungsi cash drawer tidak tersedia pada driver.");
       } catch (drawerErr) {
         reject(drawerErr);
       }
@@ -1221,26 +1232,49 @@ const renderPanelPage = () => `
             const logWsPort = ${config.wsPort};
             let logWs = null;
             const connectLogWs = () => {
-                if (logWs && [0, 1].includes(logWs.readyState)) {
-                    return;
+              if (logWs && [0, 1].includes(logWs.readyState)) {
+                return;
+              }
+              if (logWs) {
+                logWs.close();
+              }
+              logWs = new WebSocket("ws://" + window.location.hostname + ":" + logWsPort);
+              logWs.addEventListener("open", () => {
+                appendLog("WS terhubung ke bridge.");
+              });
+              logWs.addEventListener("message", (event) => {
+                try {
+                  const payload = JSON.parse(event.data);
+                  if (payload.type === "log") {
+                    appendLog(payload.message);
+                  }
+                  if (payload.type === "drawer-result") {
+                    elements.saveFeedback.textContent = payload.message || "Drawer dibuka.";
+                    appendLog("Drawer: " + (payload.status || ""));
+                  }
+                } catch (error) {
+                  console.warn("Log parse error", error);
                 }
-                if (logWs) {
-                    logWs.close();
+              });
+              logWs.addEventListener("close", () => {
+                setTimeout(connectLogWs, 1000);
+              });
+            };
+
+            const sendWs = (data) => {
+              if (!logWs || logWs.readyState === WebSocket.CLOSING || logWs.readyState === WebSocket.CLOSED) {
+                connectLogWs();
+              }
+              const deliver = () => {
+                if (logWs && logWs.readyState === WebSocket.OPEN) {
+                  logWs.send(JSON.stringify(data));
+                  return true;
                 }
-                logWs = new WebSocket("ws://" + window.location.hostname + ":" + logWsPort);
-                logWs.addEventListener("message", (event) => {
-                    try {
-                        const payload = JSON.parse(event.data);
-                        if (payload.type === "log") {
-                            appendLog(payload.message);
-                        }
-                    } catch (error) {
-                        console.warn("Log parse error", error);
-                    }
-                });
-                logWs.addEventListener("close", () => {
-                    setTimeout(connectLogWs, 1000);
-                });
+                return false;
+              };
+              if (!deliver()) {
+                setTimeout(() => deliver(), 300);
+              }
             };
 
             connectLogWs();
@@ -1271,15 +1305,9 @@ const renderPanelPage = () => `
                 }
             };
 
-            const testDrawer = async () => {
-              elements.saveFeedback.textContent = "Membuka drawer...";
-              try {
-                const res = await fetch(api + "/open-drawer", { method: "POST" });
-                const body = await res.json();
-                elements.saveFeedback.textContent = body.message || "Drawer dibuka.";
-              } catch (error) {
-                elements.saveFeedback.textContent = error.message;
-              }
+            const testDrawer = () => {
+              elements.saveFeedback.textContent = "Membuka drawer via WS...";
+              sendWs({ type: "open-drawer" });
             };
 
             elements.saveButton.addEventListener("click", saveConfig);
