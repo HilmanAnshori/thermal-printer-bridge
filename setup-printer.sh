@@ -405,10 +405,15 @@ update_config_json() {
             log_warning "config.example.json tidak ditemukan, membuat config.json baru..."
             cat > "$config_json" << 'EOF'
 {
+  "wsPort": 1818,
   "printer": {
-    "type": "usb",
-    "vid": "",
-    "pid": ""
+    "driver": "network",
+    "address": "192.168.18.50",
+    "usb": {
+      "vendorId": "",
+      "productId": ""
+    },
+    "encoding": "GB18030"
   }
 }
 EOF
@@ -420,7 +425,7 @@ EOF
         log_info "Updating config.json dengan jq..."
         local temp_json=$(mktemp)
         jq --arg vid "$SELECTED_VID" --arg pid "$SELECTED_PID" \
-           '.printer.type = "usb" | .printer.vid = $vid | .printer.pid = $pid' \
+           '.printer.driver = "usb" | .printer.usb.vendorId = $vid | .printer.usb.productId = $pid' \
            "$config_json" > "$temp_json"
         
         if [ $? -eq 0 ]; then
@@ -440,10 +445,10 @@ EOF
         # Backup original
         cp "$config_json" "${config_json}.backup"
         
-        # Update using sed (basic JSON manipulation)
-        sed -i "s/\"vid\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"vid\": \"${SELECTED_VID}\"/" "$config_json"
-        sed -i "s/\"pid\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"pid\": \"${SELECTED_PID}\"/" "$config_json"
-        sed -i "s/\"type\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"type\": \"usb\"/" "$config_json"
+        # Update using sed (basic JSON manipulation for new structure)
+        sed -i "s/\"vendorId\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"vendorId\": \"${SELECTED_VID}\"/" "$config_json"
+        sed -i "s/\"productId\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"productId\": \"${SELECTED_PID}\"/" "$config_json"
+        sed -i "s/\"driver\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"driver\": \"usb\"/" "$config_json"
         
         # Set ownership to real user if running with sudo
         if [ -n "$SUDO_USER" ]; then
