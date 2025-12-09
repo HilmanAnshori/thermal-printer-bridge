@@ -450,30 +450,33 @@ show_next_steps() {
     log_info "Konfigurasi printer selesai!"
     echo ""
     
-    echo -e "${BOLD}Untuk Thermal Bridge (Node.js):${NC}"
+    echo -e "${BOLD}Status Setup:${NC}"
     echo "  ✓ config.json sudah otomatis diupdate dengan VID/PID"
     echo "  ✓ Thermal bridge service sudah direstart (jika sedang berjalan)"
     echo ""
     
-    echo -e "${BOLD}Atau gunakan environment variables:${NC}"
+    echo -e "${BOLD}Akses Panel Monitoring:${NC}"
+    echo "  🌐 Buka browser dan akses: ${CYAN}http://localhost:3008/panel${NC}"
+    echo "  Panel ini untuk monitoring status printer dan konfigurasi"
+    echo ""
+    
+    echo -e "${BOLD}Environment Variables (Opsional):${NC}"
     echo "  export PRINTER_USB_VENDOR_ID=${SELECTED_VID}"
     echo "  export PRINTER_USB_PRODUCT_ID=${SELECTED_PID}"
+    echo "  atau: source ${CONFIG_FILE}"
     echo ""
     
-    echo -e "${BOLD}Atau source konfigurasi:${NC}"
-    echo "  source ${CONFIG_FILE}"
-    echo ""
-    
-    echo -e "${BOLD}Untuk Verify Access:${NC}"
+    echo -e "${BOLD}Verifikasi Device:${NC}"
     echo "  lsusb | grep ${SELECTED_VID}:${SELECTED_PID}"
     echo "  ls -la /dev/thermal-printer"
     echo ""
     
     echo -e "${BOLD}Troubleshooting:${NC}"
-    echo "  • Jika masih error permission, jalankan:"
+    echo "  • Jika masih error permission:"
     echo "    sudo usermod -a -G lp \$USER"
     echo "    sudo usermod -a -G plugdev \$USER"
-    echo "  • Logout dan login ulang"
+    echo "  • Logout dan login ulang untuk apply group changes"
+    echo "  • Restart thermal bridge: pm2 restart hale-thermal-bridge"
     echo ""
 }
 
