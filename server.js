@@ -863,6 +863,15 @@ app.post("/panel/api/print", async (_req, res) => {
   }
 });
 
+app.post("/panel/api/open-drawer", async (_req, res) => {
+  try {
+    await openCashDrawer();
+    res.json({ success: true, message: "Cash drawer terbuka." });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.post("/panel/api/rfcomm-bind", (req, res) => {
   try {
     const info = bindRfcommDevice(
@@ -1054,6 +1063,7 @@ const renderPanelPage = () => `
                 <div style="display:flex; gap:12px; align-items:flex-end;">
                     <button class="secondary" id="refreshStatus">Refresh Status</button>
                     <button class="secondary" id="testPrint">Tes Cetak</button>
+                  <button class="secondary" id="testDrawer">Tes Cash Drawer</button>
                     <button class="secondary" id="bindRfcomm">Bind RFCOMM</button>
                 </div>
             </div>
@@ -1104,6 +1114,7 @@ const renderPanelPage = () => `
                 saveButton: sel("saveConfig"),
                 refreshStatus: sel("refreshStatus"),
                 testPrint: sel("testPrint"),
+                testDrawer: sel("testDrawer"),
                 usbResults: sel("usbResults"),
                 btResults: sel("btResults"),
             };
@@ -1260,11 +1271,23 @@ const renderPanelPage = () => `
                 }
             };
 
+            const testDrawer = async () => {
+              elements.saveFeedback.textContent = "Membuka drawer...";
+              try {
+                const res = await fetch(api + "/open-drawer", { method: "POST" });
+                const body = await res.json();
+                elements.saveFeedback.textContent = body.message || "Drawer dibuka.";
+              } catch (error) {
+                elements.saveFeedback.textContent = error.message;
+              }
+            };
+
             elements.saveButton.addEventListener("click", saveConfig);
             elements.refreshStatus.addEventListener("click", updateStatus);
             elements.testPrint.addEventListener("click", () => {
                     fetch(api + "/print", { method: "POST", body: JSON.stringify({}) }).catch(() => {});
             });
+                elements.testDrawer.addEventListener("click", testDrawer);
             elements.bindRfcomm?.addEventListener("click", bindRfcommAction);
             document.querySelectorAll("[data-scan]").forEach((button) => {
                 button.addEventListener("click", () => {
