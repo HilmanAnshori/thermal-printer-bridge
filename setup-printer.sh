@@ -19,7 +19,15 @@ SELECTED_NAME=""
 SELECTED_BUS=""
 SELECTED_DEVICE=""
 UDEV_RULE_FILE="/etc/udev/rules.d/99-thermal-printer.rules"
-CONFIG_FILE="${HOME}/.hade/thermal-printer-config.sh"
+
+# Get real user home directory (not root when using sudo)
+REAL_USER="${SUDO_USER:-$USER}"
+if [ -n "$SUDO_USER" ]; then
+    REAL_HOME=$(eval echo ~"$SUDO_USER")
+else
+    REAL_HOME="$HOME"
+fi
+CONFIG_FILE="${REAL_HOME}/.hade/thermal-printer-config.sh"
 
 # ============================================================================
 # Helper Functions
@@ -320,8 +328,14 @@ verify_printer_access() {
 save_configuration() {
     print_section "Simpan Konfigurasi"
     
-    # Create config directory if not exists
-    mkdir -p "$(dirname "$CONFIG_FILE")"
+    # Create config directory if not exists (with proper ownership)
+    local config_dir="$(dirname "$CONFIG_FILE")"
+    mkdir -p "$config_dir"
+    
+    # Set ownership to real user if running with sudo
+    if [ -n "$SUDO_USER" ]; then
+        chown -R "$SUDO_USER":"$SUDO_USER" "$config_dir"
+    fi
     
     # Save configuration
     cat > "$CONFIG_FILE" << EOF
@@ -341,6 +355,11 @@ export PRINTER_USB_PRODUCT_ID="${SELECTED_PID}"
 EOF
     
     if [ $? -eq 0 ]; then
+        # Set ownership to real user if running with sudo
+        if [ -n "$SUDO_USER" ]; then
+            chown "$SUDO_USER":"$SUDO_USER" "$CONFIG_FILE"
+        fi
+        
         log_success "Konfigurasi disimpan: ${CONFIG_FILE}"
         echo ""
         log_info "Untuk menggunakan konfigurasi ini di shell:"
@@ -356,9 +375,20 @@ EOF
 update_config_json() {
     print_section "Update config.json"
     
-    # Find thermal bridge directory
-    local bridge_dir="${HOME}/thermal-printer-bridge"
+    # Get the real user home directory (not root when using sudo)
+    local real_user="${SUDO_USER:-$USER}"
+    local real_home
+    if [ -n "$SUDO_USER" ]; then
+        real_home=$(eval echo ~"$SUDO_USER")
+    else
+        real_home="$HOME"
+    fi
+    
+    # Find thermal bridge directory in real user's home
+    local bridge_dir="${real_home}/thermal-printer-bridge"
     local config_json="${bridge_dir}/config.json"
+    
+    log_info "Mencari thermal bridge di: ${bridge_dir}"
     
     if [ ! -d "$bridge_dir" ]; then
         log_warning "Thermal bridge directory tidak ditemukan: ${bridge_dir}"
@@ -395,6 +425,10 @@ EOF
         
         if [ $? -eq 0 ]; then
             mv "$temp_json" "$config_json"
+            # Set ownership to real user if running with sudo
+            if [ -n "$SUDO_USER" ]; then
+                chown "$SUDO_USER":"$SUDO_USER" "$config_json"
+            fi
             log_success "config.json berhasil diupdate dengan VID/PID"
         else
             rm -f "$temp_json"
@@ -411,6 +445,11 @@ EOF
         sed -i "s/\"pid\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"pid\": \"${SELECTED_PID}\"/" "$config_json"
         sed -i "s/\"type\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"type\": \"usb\"/" "$config_json"
         
+        # Set ownership to real user if running with sudo
+        if [ -n "$SUDO_USER" ]; then
+            chown "$SUDO_USER":"$SUDO_USER" "$config_json" "${config_json}.backup"
+        fi
+        
         log_success "config.json berhasil diupdate (backup: ${config_json}.backup)"
     fi
     
@@ -425,16 +464,30 @@ EOF
     fi
     echo ""
     
-    # Restart thermal bridge service if running
+    # Restart thermal bridge service if running (as real user)
     if command -v pm2 &> /dev/null; then
-        if pm2 list | grep -q "hale-thermal-bridge"; then
+        local pm2_check
+        if [ -n "$SUDO_USER" ]; then
+            pm2_check=$(su - "$SUDO_USER" -c "pm2 list 2>/dev/null" | grep -c "hale-thermal-bridge" || echo "0")
+        else
+            pm2_check=$(pm2 list 2>/dev/null | grep -c "hale-thermal-bridge" || echo "0")
+        fi
+        
+        if [ "$pm2_check" -gt 0 ]; then
             log_info "Restarting thermal bridge service..."
-            pm2 restart hale-thermal-bridge 2>/dev/null
+            if [ -n "$SUDO_USER" ]; then
+                su - "$SUDO_USER" -c "pm2 restart hale-thermal-bridge" >/dev/null 2>&1
+            else
+                pm2 restart hale-thermal-bridge >/dev/null 2>&1
+            fi
+            
             if [ $? -eq 0 ]; then
                 log_success "Thermal bridge service restarted"
             else
                 log_warning "Gagal restart service, silahkan restart manual: pm2 restart hale-thermal-bridge"
             fi
+        else
+            log_info "Thermal bridge service tidak berjalan (akan dijalankan saat diperlukan)"
         fi
     fi
 }
@@ -456,7 +509,7 @@ show_next_steps() {
     echo ""
     
     echo -e "${BOLD}Akses Panel Monitoring:${NC}"
-    echo "  🌐 Buka browser dan akses: ${CYAN}http://localhost:3008/panel${NC}"
+    echo "  🌐 Buka browser dan akses: http://localhost:3008/panel"
     echo "  Panel ini untuk monitoring status printer dan konfigurasi"
     echo ""
     
