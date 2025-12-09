@@ -1,0 +1,12 @@
+[Unit]
+Description=Thermal Printer Bridge Auto-Update Timer
+Documentation=https://github.com/HilmanAnshori/thermal-printer-bridge
+
+[Timer]
+# Run daily at 2 AM
+OnCalendar=daily
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Update Thermal Printer Bridge
+Documentation=https://github.com/HilmanAnshori/thermal-printer-bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+ExecStart=%h/thermal-printer-bridge/update-bridge.sh auto
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
