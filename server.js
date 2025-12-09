@@ -565,6 +565,31 @@ const printPayload = (payload) => {
     });
 };
 
+const openCashDrawer = () => {
+    return new Promise((resolve, reject) => {
+        const device = createDevice();
+        const printer = new escpos.Printer(device, {
+            encoding: config.printer.encoding,
+        });
+
+        device.open((deviceError) => {
+            if (deviceError) {
+                return reject(deviceError);
+            }
+
+            try {
+                printer.drawer().close((closeErr) => {
+                    if (closeErr) return reject(closeErr);
+                    console.log("[Bridge] Perintah buka drawer terkirim, koneksi ditutup.");
+                    resolve();
+                });
+            } catch (drawerErr) {
+                reject(drawerErr);
+            }
+        });
+    });
+};
+
 // --- WebSocket server ---
 const wss = new WebSocketServer({ port: config.wsPort });
 console.info(
@@ -718,8 +743,31 @@ wss.on("connection", (ws, req) => {
             return;
         }
 
-        if (data.type !== "print-receipt") {
+        if (data.type !== "print-receipt" && data.type !== "open-drawer") {
             sendWs(ws, { type: "error", message: "Tipe tidak dikenali." });
+            return;
+        }
+
+        // Handle open-drawer command
+        if (data.type === "open-drawer") {
+            try {
+                await openCashDrawer();
+                sendWs(ws, {
+                    type: "drawer-result",
+                    status: "success",
+                    message: "Cash drawer terbuka.",
+                });
+                broadcastLog("[Drawer] Cash drawer dibuka.");
+                console.log("[Bridge] Cash drawer command executed");
+            } catch (error) {
+                console.error("[Bridge] Gagal membuka drawer", error.message);
+                sendWs(ws, {
+                    type: "drawer-result",
+                    status: "error",
+                    message: error.message,
+                });
+                broadcastLog(`[Drawer] Gagal: ${error.message}`);
+            }
             return;
         }
 
